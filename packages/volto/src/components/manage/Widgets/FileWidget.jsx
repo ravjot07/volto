@@ -6,13 +6,14 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { Button, Image, Dimmer } from 'semantic-ui-react';
-import { readAsDataURL } from 'promise-file-reader';
+// import { readAsDataURL } from 'promise-file-reader';
 import { injectIntl } from 'react-intl';
 import deleteSVG from '@plone/volto/icons/delete.svg';
 import { Icon, FormFieldWrapper, UniversalLink } from '@plone/volto/components';
 import loadable from '@loadable/component';
 import { flattenToAppURL, validateFileUploadSize } from '@plone/volto/helpers';
 import { defineMessages, useIntl } from 'react-intl';
+import { Upload} from 'tus-js-client';
 
 const imageMimetypes = [
   'image/png',
@@ -93,32 +94,85 @@ const FileWidget = (props) => {
    * @param {array} files File objects
    * @returns {undefined}
    */
+
+  // const onDrop = (files) => {
+  //   const file = files[0];
+  //   if (!validateFileUploadSize(file, intl.formatMessage)) return;
+  //   readAsDataURL(file).then((data) => {
+  //     const fields = data.match(/^data:(.*);(.*),(.*)$/);
+  //     onChange(id, {
+  //       data: fields[3],
+  //       encoding: fields[2],
+  //       'content-type': fields[1],
+  //       filename: file.name,
+  //     });
+  //   });
+
+  //   let reader = new FileReader();
+  //   reader.onload = function () {
+  //     const fields = reader.result.match(/^data:(.*);(.*),(.*)$/);
+  //     if (imageMimetypes.includes(fields[1])) {
+  //       setFileType(true);
+  //       let imagePreview = document.getElementById(`field-${id}-image`);
+  //       if (imagePreview) imagePreview.src = reader.result;
+  //     } else {
+  //       setFileType(false);
+  //     }
+  //   };
+  //   reader.readAsDataURL(files[0]);
+  // };
+
+ 
+
   const onDrop = (files) => {
     const file = files[0];
     if (!validateFileUploadSize(file, intl.formatMessage)) return;
-    readAsDataURL(file).then((data) => {
-      const fields = data.match(/^data:(.*);(.*),(.*)$/);
-      onChange(id, {
-        data: fields[3],
-        encoding: fields[2],
-        'content-type': fields[1],
+  
+    // Create a new tus upload
+    const upload = new Upload(file, {
+      endpoint: "https://tusd.tusdemo.net/files/", 
+      retryDelays: [0, 1000, 3000, 5000], 
+      metadata: {
         filename: file.name,
-      });
-    });
-
-    let reader = new FileReader();
-    reader.onload = function () {
-      const fields = reader.result.match(/^data:(.*);(.*),(.*)$/);
-      if (imageMimetypes.includes(fields[1])) {
-        setFileType(true);
-        let imagePreview = document.getElementById(`field-${id}-image`);
-        if (imagePreview) imagePreview.src = reader.result;
-      } else {
-        setFileType(false);
+        filetype: file.type,
+      },
+      onError: function (error) {
+        console.log("Failed because: " + error);
+      },
+      onProgress: function (bytesUploaded, bytesTotal) {
+        const percentage = (bytesUploaded / bytesTotal * 100).toFixed(2);
+        console.log(bytesUploaded, bytesTotal, percentage + "%");
+      },
+      onSuccess: function () {
+        console.log("Upload successful. File URL:", upload.url);
+        // Set data for successful upload
+        onChange(id, {
+          'content-type': file.type,
+          filename: file.name,
+          download: upload.url, 
+        });
       }
-    };
-    reader.readAsDataURL(files[0]);
+    });
+  
+    // Start the upload
+    upload.start();
+    
+
+  // For image preview
+  let reader = new FileReader();
+  reader.onload = function () {
+    const fields = reader.result.match(/^data:(.*);(.*),(.*)$/);
+    if (imageMimetypes.includes(fields[1])) {
+      setFileType(true);
+      let imagePreview = document.getElementById(`field-${id}-image`);
+      if (imagePreview) imagePreview.src = reader.result;
+    } else {
+      setFileType(false);
+    }
   };
+  reader.readAsDataURL(file);
+};
+
 
   return (
     <FormFieldWrapper {...props}>
